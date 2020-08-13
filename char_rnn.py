@@ -9,8 +9,8 @@ import numpy as np
 
 import tensorflow as tf
 
-BATCH_SIZE = 16
-BUFFER_SIZE = 5000
+BATCH_SIZE = 12
+BUFFER_SIZE = 2500
 
 # First step: load up the text
 text_path = "data/pg10900.txt"
@@ -56,7 +56,6 @@ sequences = char_dataset.batch(seq_length+1, drop_remainder=True)
 for item in sequences.take(5):
     print(''.join(ix_to_char[item.numpy()]))
 
-
 # Each sequence needs to be split into an input and a target text
 def split_input_target(chunk):
     input_text = chunk[:-1]
@@ -64,14 +63,12 @@ def split_input_target(chunk):
 
     return input_text, target_text
 
-
 # Pack this into batches
 dataset = sequences.map(split_input_target)
 dataset = dataset.shuffle(BUFFER_SIZE).batch(BATCH_SIZE, drop_remainder=True)
 
 # Next step: we have data, now we build the model
 # The tutorial uses a GRU, so why not?
-
 vocab_size = len(vocab)
 embedding_dim = 64
 rnn_units = 128
@@ -113,7 +110,6 @@ print("Next char predictions: \n", "".join(ix_to_char[sampled_indices]))
 
 # Now: Train the model!
 ######################
-
 def loss(labels, logits):
     return tf.keras.losses.sparse_categorical_crossentropy(labels, logits, from_logits=True)
 
@@ -138,8 +134,9 @@ history = model.fit(dataset, epochs=EPOCHS, callbacks=[checkpoint_callback])
 model = build_model(vocab_size, embedding_dim, rnn_units, batch_size=1)
 model.load_weights(tf.train.latest_checkpoint(checkpoint_dir))
 model.build(tf.TensorShape([1, None]))
-model.summary()
 
+print("rebuilt model with a single batch size:")
+model.summary()
 
 def generate_text(model, start_string):
     num_generate = 1000
@@ -166,4 +163,3 @@ def generate_text(model, start_string):
     return start_string + ''.join(text_generated)
 
 print(generate_text(model, start_string="And then God said"))
-
