@@ -9,7 +9,8 @@ import numpy as np
 
 import tensorflow as tf
 
-BATCH_SIZE = 12
+EPOCHS = 5
+BATCH_SIZE = 16
 BUFFER_SIZE = 2500
 
 # First step: load up the text
@@ -126,7 +127,6 @@ checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
     filepath=checkpoint_prefix,
     save_weights_only=True)
 
-EPOCHS = 2
 history = model.fit(dataset, epochs=EPOCHS, callbacks=[checkpoint_callback])
 
 # Prediction time!
