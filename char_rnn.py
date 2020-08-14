@@ -99,8 +99,8 @@ if __name__ == "__main__":
 
     model = build_model(
         vocab_size=len(vocab),
-        embedding_dim=embedding_dim,
-        rnn_units=rnn_units,
+        embedding_dim=EMBEDDING_DIM,
+        rnn_units=RNN_UNITS,
         batch_size=BATCH_SIZE)
 
     # check the input batches and the model shape
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     model.compile(optimizer="adam", loss=loss)
 
     # Set up callbacks to save out the model state
-    checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt_{epoch}")
+    checkpoint_prefix = os.path.join(CHECKPOINT_DIR, "ckpt_{epoch}")
     checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
         filepath=checkpoint_prefix,
         save_weights_only=True)
