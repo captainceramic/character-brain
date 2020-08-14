@@ -9,72 +9,27 @@ import numpy as np
 
 import tensorflow as tf
 
-EPOCHS = 5
-BATCH_SIZE = 16
-BUFFER_SIZE = 2500
+EPOCHS = 10
+BATCH_SIZE = 12
+BUFFER_SIZE = 5000
+EMBEDDING_DIM = 64
+RNN_UNITS = 128
+CHECKPOINT_DIR = "./training_checkpoints"
 
-# First step: load up the text
-text_path = "data/pg10900.txt"
-with open(text_path, "r") as inputfile:
-    # Read the file, replace non-breaking space
-    # with a space and remove the byte-order mark.
-    # (I think this is windows / latin encoding stuff.
-    text = inputfile.read().replace("\xa0", " ").replace("\ufeff", "")
+def loss(labels, logits):
+    return tf.keras.losses.sparse_categorical_crossentropy(labels, logits, from_logits=True)
 
-print(text[10000:10100])
-print("input text contains {} characters".format(len(text)))
 
-# The plan is to use a small-dimension embedding +
-# a LSTM/GRU approach. I don't think I can code up
-# a transformer / attention model on this hardware.
-
-# Following the tutorial - extract the number of unique characters.
-# (letters, punctuation, weird bytes)
-vocab = sorted(set(text))
-
-# First step in the processing is transforming the
-# massive string into an array of integers.
-char_to_ix = {u:i for i, u in enumerate(vocab)}
-ix_to_char = np.array(vocab)
-
-# This is a numpy array of 32bit integers representing
-# the complete text.
-text_as_int = np.array([char_to_ix[char] for char in text])
-
-# Now we need to split the array into a sequences of a given length
-# Take in 100 characters, predict the next one.
-seq_length = 100
-examples_per_epoch = len(text) // (seq_length + 1)
-
-# Use the tensorflow dataset
-char_dataset = tf.data.Dataset.from_tensor_slices(text_as_int)
-# have a look at some letters:
-for i in char_dataset.take(5):
-    print(ix_to_char[i.numpy()])
-
-# Now we batch these up
-sequences = char_dataset.batch(seq_length+1, drop_remainder=True)
-for item in sequences.take(5):
-    print(''.join(ix_to_char[item.numpy()]))
-
-# Each sequence needs to be split into an input and a target text
 def split_input_target(chunk):
+    """ Each sequence needs to be split into an input and a target text """
     input_text = chunk[:-1]
     target_text = chunk[1:]
-
+    
     return input_text, target_text
 
-# Pack this into batches
-dataset = sequences.map(split_input_target)
-dataset = dataset.shuffle(BUFFER_SIZE).batch(BATCH_SIZE, drop_remainder=True)
-
-# Next step: we have data, now we build the model
-# The tutorial uses a GRU, so why not?
-vocab_size = len(vocab)
-embedding_dim = 64
-rnn_units = 128
 
 def build_model(vocab_size, embedding_dim, rnn_units, batch_size):
+    """ Build the recurrent neural network """
     model = tf.keras.Sequential([
         tf.keras.layers.Embedding(vocab_size, embedding_dim,
                                   batch_input_shape=[batch_size, None]),
@@ -87,79 +42,95 @@ def build_model(vocab_size, embedding_dim, rnn_units, batch_size):
 
     return model
 
-model = build_model(
-    vocab_size=len(vocab),
-    embedding_dim=embedding_dim,
-    rnn_units=rnn_units,
-    batch_size=BATCH_SIZE)
 
-# check the input batches and the model shape
-for input_example_batch, target_example_batch in dataset.take(1):
-    example_batch_predictions = model(input_example_batch)
-    print(example_batch_predictions.shape)
+if __name__ == "__main__":
 
-model.summary()
+    # First step: load up the text
+    text_path = "data/pg10900.txt"
+    with open(text_path, "r") as inputfile:
+        # Read the file, replace non-breaking space
+        # with a space and remove the byte-order mark.
+        # (I think this is windows / latin encoding stuff.
+        text = inputfile.read().replace("\xa0", " ").replace("\ufeff", "")
 
-# The output will be logits, we sample from there
-sampled_indices = tf.random.categorical(example_batch_predictions[0], num_samples=1)
-sampled_indices = tf.squeeze(sampled_indices, axis=-1).numpy()
+    print(text[10000:10100])
+    print("input text contains {} characters".format(len(text)))
 
-# decode the sampled indices to look at some raw output on a batch
-print("Input: \n", "".join(ix_to_char[input_example_batch[0]]))
-print()
-print("Next char predictions: \n", "".join(ix_to_char[sampled_indices]))
+    # The plan is to use a small-dimension embedding +
+    # a LSTM/GRU approach. I don't think I can code up
+    # a transformer / attention model on this hardware.
 
-# Now: Train the model!
-######################
-def loss(labels, logits):
-    return tf.keras.losses.sparse_categorical_crossentropy(labels, logits, from_logits=True)
+    # Following the tutorial - extract the number of unique characters.
+    # (letters, punctuation, weird bytes)
+    vocab = sorted(set(text))
 
-example_batch_loss = loss(target_example_batch, example_batch_predictions)
-print("prediction shape: ", example_batch_predictions.shape)
-print("scalar loss: ", example_batch_loss.numpy().mean())
+    # First step in the processing is transforming the
+    # massive string into an array of integers.
+    char_to_ix = {u:i for i, u in enumerate(vocab)}
+    ix_to_char = np.array(vocab)
 
-model.compile(optimizer="adam", loss=loss)
+    # This is a numpy array of 32bit integers representing
+    # the complete text.
+    text_as_int = np.array([char_to_ix[char] for char in text])
 
-# Set up callbacks to save out the model state
-checkpoint_dir = "./training_checkpoints"
-checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt_{epoch}")
-checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-    filepath=checkpoint_prefix,
-    save_weights_only=True)
+    # Now we need to split the array into a sequences of a given length
+    # Take in 100 characters, predict the next one.
+    seq_length = 100
+    examples_per_epoch = len(text) // (seq_length + 1)
 
-history = model.fit(dataset, epochs=EPOCHS, callbacks=[checkpoint_callback])
+    # Use the tensorflow dataset
+    char_dataset = tf.data.Dataset.from_tensor_slices(text_as_int)
+    # have a look at some letters:
+    for i in char_dataset.take(5):
+        print(ix_to_char[i.numpy()])
 
-# Prediction time!
-# Now we reload the trained weights.
-model = build_model(vocab_size, embedding_dim, rnn_units, batch_size=1)
-model.load_weights(tf.train.latest_checkpoint(checkpoint_dir))
-model.build(tf.TensorShape([1, None]))
+    # Now we batch these up
+    sequences = char_dataset.batch(seq_length+1, drop_remainder=True)
+    for item in sequences.take(5):
+        print(''.join(ix_to_char[item.numpy()]))
+        
+    # Pack this into batches
+    dataset = sequences.map(split_input_target)
+    dataset = dataset.shuffle(BUFFER_SIZE).batch(BATCH_SIZE, drop_remainder=True)
 
-print("rebuilt model with a single batch size:")
-model.summary()
+    # Next step: we have data, now we build the model
+    # The tutorial uses a GRU, so why not?
+    vocab_size = len(vocab)
 
-def generate_text(model, start_string):
-    num_generate = 1000
+    model = build_model(
+        vocab_size=len(vocab),
+        embedding_dim=embedding_dim,
+        rnn_units=rnn_units,
+        batch_size=BATCH_SIZE)
 
-    # convert the input string to numbers
-    input_eval = [char_to_ix[s] for s in start_string]
-                
-    text_generated = []
+    # check the input batches and the model shape
+    for input_example_batch, target_example_batch in dataset.take(1):
+        example_batch_predictions = model(input_example_batch)
+        print(example_batch_predictions.shape)
 
-    temperature = 1.0
+    model.summary()
 
-    model.reset_states()
-    for i in range(num_generate):
-        predictions = model(input_eval)
-        predictions = tf.squeeze(predictions, 0)
-        predictions = predictions / temperature
+    # The output will be logits, we sample from there
+    sampled_indices = tf.random.categorical(example_batch_predictions[0], num_samples=1)
+    sampled_indices = tf.squeeze(sampled_indices, axis=-1).numpy()
 
-        predicted_id = tf.random.categorical(predictions, num_samples=1)[-1, 0].numpy()
+    # decode the sampled indices to look at some raw output on a batch
+    print("Input: \n", "".join(ix_to_char[input_example_batch[0]]))
+    print()
+    print("Next char predictions: \n", "".join(ix_to_char[sampled_indices]))
 
-        input_eval = tf.expand_dims([predicted_id], 0)
+    # Now: Train the model!
+    ######################
+    example_batch_loss = loss(target_example_batch, example_batch_predictions)
+    print("prediction shape: ", example_batch_predictions.shape)
+    print("scalar loss: ", example_batch_loss.numpy().mean())
 
-        text_generated.append(ix_to_char[predicted_id])
+    model.compile(optimizer="adam", loss=loss)
 
-    return start_string + ''.join(text_generated)
+    # Set up callbacks to save out the model state
+    checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt_{epoch}")
+    checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_prefix,
+        save_weights_only=True)
 
-print(generate_text(model, start_string="And then God said"))
+    history = model.fit(dataset, epochs=EPOCHS, callbacks=[checkpoint_callback])

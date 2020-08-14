@@ -1,4 +1,6 @@
 data
 *~
+#*
+__pycache__
 training_checkpoints
 
