@@ -9,12 +9,14 @@ import numpy as np
 
 import tensorflow as tf
 
-EPOCHS = 10
-BATCH_SIZE = 12
-BUFFER_SIZE = 5000
-EMBEDDING_DIM = 64
-RNN_UNITS = 128
+EPOCHS = 100
+BATCH_SIZE = 256
+BUFFER_SIZE = 10000
+EMBEDDING_DIM = 192
+RNN_UNITS = 256
 CHECKPOINT_DIR = "./training_checkpoints"
+TEXT_PATH = "./data/star_wars.txt"
+
 
 def loss(labels, logits):
     return tf.keras.losses.sparse_categorical_crossentropy(labels, logits, from_logits=True)
@@ -46,8 +48,7 @@ def build_model(vocab_size, embedding_dim, rnn_units, batch_size):
 if __name__ == "__main__":
 
     # First step: load up the text
-    text_path = "data/pg10900.txt"
-    with open(text_path, "r") as inputfile:
+    with open(TEXT_PATH, "r") as inputfile:
         # Read the file, replace non-breaking space
         # with a space and remove the byte-order mark.
         # (I think this is windows / latin encoding stuff.

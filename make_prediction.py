@@ -9,11 +9,11 @@ https://www.tensorflow.org/tutorials/text/text_generation
 import numpy as np
 import tensorflow as tf
 
-from char_rnn import build_model, EMBEDDING_DIM, RNN_UNITS, CHECKPOINT_DIR
+from char_rnn import build_model, EMBEDDING_DIM, RNN_UNITS, CHECKPOINT_DIR, TEXT_PATH
 
 # We need an identical dictionary, and a way to map between
 # characters and numbers for the embedding.
-text_path = "data/pg10900.txt"
+text_path = TEXT_PATH
 with open(text_path, "r") as inputfile:
     # Read the file, replace non-breaking space
     # with a space and remove the byte-order mark.
@@ -60,4 +60,4 @@ def generate_text(model, start_string):
 
     return start_string + ''.join(text_generated)
 
-print(generate_text(model, start_string="And then God said"))
+print(generate_text(model, start_string="HAN:"))
