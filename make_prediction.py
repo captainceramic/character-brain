@@ -9,22 +9,14 @@ https://www.tensorflow.org/tutorials/text/text_generation
 import numpy as np
 import tensorflow as tf
 
-from char_rnn import build_model, EMBEDDING_DIM, RNN_UNITS, CHECKPOINT_DIR, TEXT_PATH
+from char_rnn import EMBEDDING_DIM, RNN_UNITS, CHECKPOINT_DIR
+from char_rnn import build_model, get_vocab
+
 
 # We need an identical dictionary, and a way to map between
 # characters and numbers for the embedding.
-text_path = TEXT_PATH
-with open(text_path, "r") as inputfile:
-    # Read the file, replace non-breaking space
-    # with a space and remove the byte-order mark.
-    # (I think this is windows / latin encoding stuff.
-    text = inputfile.read().replace("\xa0", " ").replace("\ufeff", "")
-
-vocab = sorted(set(text))
+vocab, text, char_to_ix, ix_to_char  = get_vocab()
 vocab_size = len(vocab)
-char_to_ix = {u:i for i, u in enumerate(vocab)}
-ix_to_char = np.array(vocab)
-
 
 # Prediction time!
 # Now we reload the trained weights.
@@ -58,6 +50,8 @@ def generate_text(model, start_string):
 
         text_generated.append(ix_to_char[predicted_id])
 
-    return start_string + ''.join(text_generated)
+    print(text_generated)
+        
+    return ''.join(start_string + text_generated)
 
-print(generate_text(model, start_string="HAN:"))
+print(generate_text(model, start_string="and then God said".split()))
