@@ -5,17 +5,22 @@
 """
 
 import os
+
 import numpy as np
-
 import tensorflow as tf
+# Use the alternative regex module
+# as it includes punctuation
+import regex as re
 
-EPOCHS = 100
-BATCH_SIZE = 256
-BUFFER_SIZE = 10000
-EMBEDDING_DIM = 192
-RNN_UNITS = 256
+
+EPOCHS = 10
+BATCH_SIZE = 32
+BUFFER_SIZE = 500
+EMBEDDING_DIM = 64
+RNN_UNITS = 128
 CHECKPOINT_DIR = "./training_checkpoints"
-TEXT_PATH = "./data/star_wars.txt"
+#TEXT_PATH = "./data/star_wars.txt"
+TEXT_PATH = "./data/pg10900.txt"
 
 
 def loss(labels, logits):
@@ -29,6 +34,51 @@ def split_input_target(chunk):
     
     return input_text, target_text
 
+def get_vocab():
+    """ Load up the text file, pre-process and extract vocab. """
+    
+    with open(TEXT_PATH, "r") as inputfile:
+        # Read the file, replace non-breaking space
+        # with a space and remove the byte-order mark.
+        # (I think this is windows / latin encoding stuff.
+        text = inputfile.read().replace("\xa0", " ").replace("\ufeff", "")
+
+    # Check the characters have been correctly loaded up:
+    print("unique characters are:\n", sorted(set(text)))
+
+    print(text[10000:10050])
+    print("input text contains {} characters".format(len(text)))
+
+    # Now - pre-process by replacing any repeated spaces with single spaces.
+    text = re.sub(r' +', ' ', text)
+
+    # Deal with numbers
+    text = re.sub(r'\d+', '(number)', text)
+
+    # Then we want to split into individual words.
+    # Options:
+    #    * Regulate cases?
+
+    # I want to split on whitespace or punctiation.
+    text_split = re.split(r"([\W+\p])", text)
+    print("input text contains {} words".format(len(text_split)))
+
+    # The plan is to use a small-dimension embedding +
+    # a LSTM/GRU approach. I don't think I can code up
+    # a transformer / attention model on this hardware.
+
+    # Following the tutorial - extract the number of unique characters.
+    # (letters, punctuation, weird bytes)
+    vocab = set(text_split)
+    print("vocab contains {} words".format(len(vocab)))
+    
+    # First step in the processing is transforming the
+    # massive string into an array of integers.
+    word_to_ix = {u:i for i, u in enumerate(vocab)}
+    ix_to_word = np.array(list(vocab))
+
+    return vocab, text_split, word_to_ix, ix_to_word
+    
 
 def build_model(vocab_size, embedding_dim, rnn_units, batch_size):
     """ Build the recurrent neural network """
@@ -47,28 +97,8 @@ def build_model(vocab_size, embedding_dim, rnn_units, batch_size):
 
 if __name__ == "__main__":
 
-    # First step: load up the text
-    with open(TEXT_PATH, "r") as inputfile:
-        # Read the file, replace non-breaking space
-        # with a space and remove the byte-order mark.
-        # (I think this is windows / latin encoding stuff.
-        text = inputfile.read().replace("\xa0", " ").replace("\ufeff", "")
-
-    print(text[10000:10100])
-    print("input text contains {} characters".format(len(text)))
-
-    # The plan is to use a small-dimension embedding +
-    # a LSTM/GRU approach. I don't think I can code up
-    # a transformer / attention model on this hardware.
-
-    # Following the tutorial - extract the number of unique characters.
-    # (letters, punctuation, weird bytes)
-    vocab = sorted(set(text))
-
-    # First step in the processing is transforming the
-    # massive string into an array of integers.
-    char_to_ix = {u:i for i, u in enumerate(vocab)}
-    ix_to_char = np.array(vocab)
+    # Load up the text file
+    vocab, text, char_to_ix, ix_to_char  = get_vocab()
 
     # This is a numpy array of 32bit integers representing
     # the complete text.
@@ -76,7 +106,7 @@ if __name__ == "__main__":
 
     # Now we need to split the array into a sequences of a given length
     # Take in 100 characters, predict the next one.
-    seq_length = 100
+    seq_length = 30
     examples_per_epoch = len(text) // (seq_length + 1)
 
     # Use the tensorflow dataset
@@ -116,7 +146,7 @@ if __name__ == "__main__":
     sampled_indices = tf.squeeze(sampled_indices, axis=-1).numpy()
 
     # decode the sampled indices to look at some raw output on a batch
-    print("Input: \n", "".join(ix_to_char[input_example_batch[0]]))
+    print("Input: \n", "".join(ix_to_char[input_example_batch[0].numpy()]))
     print()
     print("Next char predictions: \n", "".join(ix_to_char[sampled_indices]))
 
