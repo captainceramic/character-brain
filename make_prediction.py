@@ -8,19 +8,19 @@ https://www.tensorflow.org/tutorials/text/text_generation
 
 import numpy as np
 import tensorflow as tf
+import tensorflow_datasets as tfds
 
-from char_rnn import EMBEDDING_DIM, RNN_UNITS, CHECKPOINT_DIR
-from char_rnn import build_model, get_vocab
+from char_rnn import EMBEDDING_DIM, RNN_UNITS, CHECKPOINT_DIR, VOCAB_PATH
+from char_rnn import build_model
 
 
 # We need an identical dictionary, and a way to map between
 # characters and numbers for the embedding.
-vocab, text, char_to_ix, ix_to_char  = get_vocab()
-vocab_size = len(vocab)
+encoder = tfds.features.text.SubwordTextEncoder.load_from_file(VOCAB_PATH)
 
 # Prediction time!
 # Now we reload the trained weights.
-model = build_model(vocab_size, EMBEDDING_DIM, RNN_UNITS, batch_size=1)
+model = build_model(encoder.vocab_size, EMBEDDING_DIM, RNN_UNITS, batch_size=1)
 model.load_weights(tf.train.latest_checkpoint(CHECKPOINT_DIR))
 model.build(tf.TensorShape([1, None]))
 
@@ -28,13 +28,13 @@ print("rebuilt model with a single batch size:")
 model.summary()
 
 def generate_text(model, start_string):
-    num_generate = 1000
+    num_generate = 100
 
     # convert the input string to numbers
-    input_eval = [char_to_ix[s] for s in start_string]
+    input_eval = encoder.encode(start_string)
     input_eval = tf.expand_dims(input_eval, 0)
                 
-    text_generated = []
+    output_predictions = []
 
     temperature = 1.0
 
@@ -46,12 +46,10 @@ def generate_text(model, start_string):
 
         predicted_id = tf.random.categorical(predictions, num_samples=1)[-1, 0].numpy()
 
-        input_eval = tf.expand_dims([predicted_id], 0)
+        output_predictions.append(predicted_id)
 
-        text_generated.append(ix_to_char[predicted_id])
-
-    print(text_generated)
+    text_generated = encoder.decode(output_predictions)
         
-    return ''.join(start_string + text_generated)
+    return start_string + text_generated
 
-print(generate_text(model, start_string="and then God said".split()))
+print(generate_text(model, start_string="and then God said"))

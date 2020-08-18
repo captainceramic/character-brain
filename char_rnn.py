@@ -5,13 +5,11 @@
 """
 
 import os
+import re
 
 import numpy as np
 import tensorflow as tf
-# Use the alternative regex module
-# as it includes punctuation
-import regex as re
-
+import tensorflow_datasets as tfds
 
 EPOCHS = 10
 BATCH_SIZE = 32
@@ -21,6 +19,7 @@ RNN_UNITS = 128
 CHECKPOINT_DIR = "./training_checkpoints"
 #TEXT_PATH = "./data/star_wars.txt"
 TEXT_PATH = "./data/pg10900.txt"
+VOCAB_PATH = "./data/vocab_encoder.dat"
 
 
 def loss(labels, logits):
@@ -35,7 +34,12 @@ def split_input_target(chunk):
     return input_text, target_text
 
 def get_vocab():
-    """ Load up the text file, pre-process and extract vocab. """
+    """ Load up the text file, pre-process and extract vocab.
+
+    Rather than do this manually, I use the TensorFlow datasets
+    subword encoder.
+
+    """
     
     with open(TEXT_PATH, "r") as inputfile:
         # Read the file, replace non-breaking space
@@ -43,42 +47,22 @@ def get_vocab():
         # (I think this is windows / latin encoding stuff.
         text = inputfile.read().replace("\xa0", " ").replace("\ufeff", "")
 
-    # Check the characters have been correctly loaded up:
-    print("unique characters are:\n", sorted(set(text)))
+    try:
+        encoder = tfds.features.text.SubwordTextEncoder.load_from_file(VOCAB_PATH)
+    except tf.errors.NotFoundError as err:
+        # Check the characters have been correctly loaded up:
+        print("unique characters are:\n", sorted(set(text)))
 
-    print(text[10000:10050])
-    print("input text contains {} characters".format(len(text)))
+        # Now use the subword encoder
+        split_text = re.split(r"(\n)", text)
+        print("input text contains {} lines".format(len(split_text)))
+        
+        encoder = tfds.features.text.SubwordTextEncoder.build_from_corpus(
+            split_text, target_vocab_size=2**13)
+        encoder.save_to_file(VOCAB_PATH)
+        
+    return encoder, text
 
-    # Now - pre-process by replacing any repeated spaces with single spaces.
-    text = re.sub(r' +', ' ', text)
-
-    # Deal with numbers
-    text = re.sub(r'\d+', '(number)', text)
-
-    # Then we want to split into individual words.
-    # Options:
-    #    * Regulate cases?
-
-    # I want to split on whitespace or punctiation.
-    text_split = re.split(r"([\W+\p])", text)
-    print("input text contains {} words".format(len(text_split)))
-
-    # The plan is to use a small-dimension embedding +
-    # a LSTM/GRU approach. I don't think I can code up
-    # a transformer / attention model on this hardware.
-
-    # Following the tutorial - extract the number of unique characters.
-    # (letters, punctuation, weird bytes)
-    vocab = set(text_split)
-    print("vocab contains {} words".format(len(vocab)))
-    
-    # First step in the processing is transforming the
-    # massive string into an array of integers.
-    word_to_ix = {u:i for i, u in enumerate(vocab)}
-    ix_to_word = np.array(list(vocab))
-
-    return vocab, text_split, word_to_ix, ix_to_word
-    
 
 def build_model(vocab_size, embedding_dim, rnn_units, batch_size):
     """ Build the recurrent neural network """
@@ -98,27 +82,27 @@ def build_model(vocab_size, embedding_dim, rnn_units, batch_size):
 if __name__ == "__main__":
 
     # Load up the text file
-    vocab, text, char_to_ix, ix_to_char  = get_vocab()
+    encoder, raw_text  = get_vocab()
 
     # This is a numpy array of 32bit integers representing
     # the complete text.
-    text_as_int = np.array([char_to_ix[char] for char in text])
+    text_as_int = encoder.encode(raw_text)
 
     # Now we need to split the array into a sequences of a given length
-    # Take in 100 characters, predict the next one.
-    seq_length = 30
-    examples_per_epoch = len(text) // (seq_length + 1)
+    # Take in X subwords, predict the next one.
+    seq_length = 40
+    examples_per_epoch = len(text_as_int) // (seq_length + 1)
 
     # Use the tensorflow dataset
     char_dataset = tf.data.Dataset.from_tensor_slices(text_as_int)
     # have a look at some letters:
     for i in char_dataset.take(5):
-        print(ix_to_char[i.numpy()])
+        print(encoder.decode([i.numpy()]))
 
     # Now we batch these up
     sequences = char_dataset.batch(seq_length+1, drop_remainder=True)
     for item in sequences.take(5):
-        print(''.join(ix_to_char[item.numpy()]))
+        print(''.join(encoder.decode(item.numpy())))
         
     # Pack this into batches
     dataset = sequences.map(split_input_target)
@@ -126,10 +110,10 @@ if __name__ == "__main__":
 
     # Next step: we have data, now we build the model
     # The tutorial uses a GRU, so why not?
-    vocab_size = len(vocab)
 
+    vocab_size = encoder.vocab_size
     model = build_model(
-        vocab_size=len(vocab),
+        vocab_size=vocab_size,
         embedding_dim=EMBEDDING_DIM,
         rnn_units=RNN_UNITS,
         batch_size=BATCH_SIZE)
@@ -146,9 +130,8 @@ if __name__ == "__main__":
     sampled_indices = tf.squeeze(sampled_indices, axis=-1).numpy()
 
     # decode the sampled indices to look at some raw output on a batch
-    print("Input: \n", "".join(ix_to_char[input_example_batch[0].numpy()]))
-    print()
-    print("Next char predictions: \n", "".join(ix_to_char[sampled_indices]))
+    print("Input: \n", "".join(encoder.decode(input_example_batch[0].numpy())))
+    print("Next char predictions: \n", "".join(encoder.decode(sampled_indices)))
 
     # Now: Train the model!
     ######################
