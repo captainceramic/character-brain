@@ -11,11 +11,12 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
-EPOCHS = 10
+EPOCHS = 40
+
 BATCH_SIZE = 32
-BUFFER_SIZE = 500
+BUFFER_SIZE = 5000
 EMBEDDING_DIM = 64
-RNN_UNITS = 128
+RNN_UNITS = 80
 CHECKPOINT_DIR = "./training_checkpoints"
 #TEXT_PATH = "./data/star_wars.txt"
 TEXT_PATH = "./data/pg10900.txt"
@@ -58,7 +59,7 @@ def get_vocab():
         print("input text contains {} lines".format(len(split_text)))
         
         encoder = tfds.features.text.SubwordTextEncoder.build_from_corpus(
-            split_text, target_vocab_size=2**13)
+            split_text, target_vocab_size=2**15)
         encoder.save_to_file(VOCAB_PATH)
         
     return encoder, text
